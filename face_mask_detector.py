@@ -36,69 +36,67 @@ writer = None
 # grab the frame from the threaded video stream
 t1 = time.time()
 while True:
-	t2 = time.time()
-	if t2-t1 < 1/fps:
-		continue
-	t1 = t2
-
 	# grab the frame from the threaded video stream
 	frame = vs.read()
 	frame = frame[1] if args.get("input", False) else frame
-
 	frame = imutils.resize(frame, width=800)
 	(h, w) = frame.shape[:2]
 
-	# construct a blob from the image
-	imageBlob = cv2.dnn.blobFromImage(cv2.resize(frame, (300, 300)), 1.0, (300, 300), (104.0, 177.0, 123.0), swapRB=False, crop=False)
+	t2 = time.time()
+	if t2-t1 > 1/fps:
+		t1 = t2
 
-	# apply OpenCV's deep learning-based face detector to localize faces in the input image
-	face_detector.setInput(imageBlob)
-	detections = face_detector.forward()
-	
-	if len(detections) > 0:
+		# construct a blob from the image
+		imageBlob = cv2.dnn.blobFromImage(cv2.resize(frame, (300, 300)), 1.0, (300, 300), (104.0, 177.0, 123.0), swapRB=False, crop=False)
 
-		faces, centroids, bbox, results, radius = [], [], [], [], []
+		# apply OpenCV's deep learning-based face detector to localize faces in the input image
+		face_detector.setInput(imageBlob)
+		detections = face_detector.forward()
+		
+		if len(detections) > 0:
 
-		for i in range(0, detections.shape[2]):
-		    confidence = detections[0, 0, i, 2]
+			faces, centroids, bbox, results, radius = [], [], [], [], []
 
-		    if confidence > 0.7:
-		        box = detections[0, 0, i, 3:7] * np.array([w, h, w, h])
-		        (startX, startY, endX, endY) = box.astype("int")
-		        x = int((endX-startX)/2 + startX)
-		        y = int((endY-startY)/2 + startY)
+			for i in range(0, detections.shape[2]):
+			    confidence = detections[0, 0, i, 2]
 
-		        face = frame[startY:endY, startX:endX]
-		        (fH, fW) = face.shape[:2]
+			    if confidence > 0.7:
+			        box = detections[0, 0, i, 3:7] * np.array([w, h, w, h])
+			        (startX, startY, endX, endY) = box.astype("int")
+			        x = int((endX-startX)/2 + startX)
+			        y = int((endY-startY)/2 + startY)
 
-		        # ensure the face width and height are sufficiently large
-		        if fW < 20 or fH < 20:
-		        	continue
+			        face = frame[startY:endY, startX:endX]
+			        (fH, fW) = face.shape[:2]
 
-		        face = cv2.cvtColor(face, cv2.COLOR_BGR2RGB)
-		        face = cv2.resize(face, (224, 224))
-		        face = img_to_array(face)
-		        face = preprocess_input(face)
-		        face = np.expand_dims(face, axis=0)
-		        faces.append(face)
-		        centroids.append((x,y))
-		        radius.append(int((endX-startX)/5*3))
-		        bbox.append((startX, startY, endX, endY))
+			        # ensure the face width and height are sufficiently large
+			        if fW < 20 or fH < 20:
+			        	continue
 
-		if len(faces) > 0:
-			out = []
-			for (face, center, rad, box) in zip(faces, centroids, radius, bbox):
-				result = mask_detector.predict(face)
-				(mask, withoutMask) = result[0]
-				(startX, startY, endX, endY) = box
+			        face = cv2.cvtColor(face, cv2.COLOR_BGR2RGB)
+			        face = cv2.resize(face, (224, 224))
+			        face = img_to_array(face)
+			        face = preprocess_input(face)
+			        face = np.expand_dims(face, axis=0)
+			        faces.append(face)
+			        centroids.append((x,y))
+			        radius.append(int((endX-startX)/5*3))
+			        bbox.append((startX, startY, endX, endY))
 
-				if mask > withoutMask:
-				    cv2.rectangle(frame, (startX, startY), (endX, endY), (0, 255, 0), 2)
-				    out.append('MASK')
-				else:
-				    cv2.circle(frame, center, rad, (0, 0, 255), 2)
-				    out.append('NO MASK')
-			print(out)
+			if len(faces) > 0:
+				out = []
+				for (face, center, rad, box) in zip(faces, centroids, radius, bbox):
+					result = mask_detector.predict(face)
+					(mask, withoutMask) = result[0]
+					(startX, startY, endX, endY) = box
+
+					if mask > withoutMask:
+					    cv2.rectangle(frame, (startX, startY), (endX, endY), (0, 255, 0), 2)
+					    out.append('MASK')
+					else:
+					    cv2.circle(frame, center, rad, (0, 0, 255), 2)
+					    out.append('NO MASK')
+				print(out)
 
 	if args["display"]:
 		cv2.imshow("Frame", frame)
